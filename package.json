@@ -1,0 +1,25 @@
+{
+  "name": "octothorpe",
+  "version": "1.0.0",
+  "description": "A Bot which Toots the popular hashtags across all queryable Mastodon instances",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "bot",
+    "mastodon",
+    "toot",
+    "hashtag",
+    "octothorpe"
+  ],
+  "author": "Darkenvy",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.21.0",
+    "dotenv": "^8.2.0",
+    "lodash": "^4.17.20",
+    "nedb": "^1.8.0",
+    "path": "^0.12.7"
+  }
+}
