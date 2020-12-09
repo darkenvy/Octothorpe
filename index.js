@@ -1,13 +1,13 @@
 require('dotenv').config();
-const Nedb = require('nedb');
+// const Nedb = require('nedb');
 const path = require('path');
 const axios = require('axios');
 const _ = require('lodash');
 
-const db = new Nedb({
-  filename: path.join(__dirname, 'instances.db'),
-  autoload: true,
-});
+// const db = new Nedb({
+//   filename: path.join(__dirname, 'instances.db'),
+//   autoload: true,
+// });
 
 // -------------------------------------------------------------------------- //
 
@@ -36,7 +36,7 @@ async function request(params) {
   return response;
 }
 
-async function main() {
+async function getInstanceList() {
   // Query for a list of all Mastodon servers
   const response = await request({
     url: INSTANCE_LIST_ENDPOINT,
@@ -49,48 +49,68 @@ async function main() {
   const instances = _.get(response, 'data.instances', []);
   const instanceList = instances.map(instance => instance.name);
 
-  // For each server, query it for the list of hashtags
-  const tagList = {};
-  for (let instanceIdx in instanceList) {
-    if (instanceIdx == 5) break;
-    const instanceName = instanceList[instanceIdx]
-    console.log(`Querying ${instanceIdx} of ${instanceList.length}. ${instanceName}`);
+  return instanceList;
+}
 
+function restructureTags(tags) {
+  return tags.map(tagObject => ({
+    name: tagObject.name,
+    history: tagObject.history.map(day => parseInt(day.accounts, 10)),
+  }));
+}
+
+function collapseDuplicateTags(tagsToAdd) {
+  /* add tags to the master list. If the same tag exists already in 
+  the master list, then we must merge both arrays together.
+  [0,1,2] and [5,6,7] will become [5,7,9]. */
+  const tagList = {};
+  const formattedTags = restructureTags(tagsToAdd);
+
+  formattedTags.forEach(tag => {
+    const { name, history } = tag;
+
+    if (tagList[name]) {
+      const existingTagList = tagList[name];
+      const nextTagList = existingTagList.map((item, idx) => item + history[idx]);
+      console.log('merging', name, existingTagList, history, nextTagList)
+
+      tagList[name] = nextTagList;
+      
+      return;
+    }
+
+    tagList[name] = history;
+  });
+
+  return tagList;
+}
+
+async function getTagsFromInstances(instanceList) {
+  let tags = [];
+
+  /* For each server, query it for the list of hashtags. 'for' loops are very
+  friendly with async/await. Avoid forEach/map loops */
+  for (let instanceIdx in instanceList) {
+    if (instanceIdx == 3) break; // todo: debug
+    console.log(`Querying ${instanceIdx} of ${instanceList.length}. ${instanceList[instanceIdx]}`);
+    const instanceName = instanceList[instanceIdx];
     const url = `https://${instanceName}/api/v1/trends`;
     const response = await request({ url });
-
-    if (!response) continue;
-
-    // clean data
     const data = _.get(response, 'data', []);
-    const tags = data.map(tagObject => ({
-      name: tagObject.name,
-      history: tagObject.history.map(day => parseInt(day.accounts, 10)),
-    }));
 
-    /* add tags from the latest query to the master list.
-    If the same tag exists already in the master list, then we must merge both
-    arrays together. [0,1,2] and [5,6,7] will become [5,7,9].
-    */
-    tags.forEach(tag => {
-      const { name, history } = tag;
-
-      if (name === 'VenezuelaProtegida') console.log('!!!!', instanceName)
-
-      if (tagList[name]) {
-        const existingTagList = tagList[name];
-        const nextTagList = existingTagList.map((item, idx) => item + history[idx]);
-        console.log('merging', name, existingTagList, history, nextTagList)
-
-        tagList[name] = nextTagList;
-      } else {
-        tagList[name] = history;
-      }
-    });
+    tags = tags.concat(data);
   }
 
-  console.log(tagList);
-  console.log(Object.keys(tagList).length);
+  return tags;
+}
+
+async function main() {
+  const instanceList = await getInstanceList();
+  const rawTagsFromInstances = await getTagsFromInstances(instanceList);
+  const dedupedTagsFromInstances = collapseDuplicateTags(rawTagsFromInstances);
+
+  console.log(dedupedTagsFromInstances);
+  console.log(Object.keys(dedupedTagsFromInstances).length);
 }
 
 (main)();
